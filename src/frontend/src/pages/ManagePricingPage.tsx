@@ -194,16 +194,15 @@ export default function ManagePricingPage() {
                   <SelectValue placeholder="Select a customer..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredCustomers.length === 0 ? (
-                    <div className="py-4 text-center text-sm text-muted-foreground">
-                      No customers found
-                    </div>
-                  ) : (
-                    filteredCustomers.map((c) => (
-                      <SelectItem key={String(c.id)} value={String(c.id)}>
-                        {c.name}
-                      </SelectItem>
-                    ))
+                  {filteredCustomers.map((c) => (
+                    <SelectItem key={String(c.id)} value={String(c.id)}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                  {filteredCustomers.length === 0 && customers.length > 0 && (
+                    <SelectItem value="__none__" disabled>
+                      No customers match search
+                    </SelectItem>
                   )}
                 </SelectContent>
               </Select>
