@@ -171,21 +171,21 @@ actor {
   // User Profile Functions
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+      return null;
     };
     userProfiles.get(caller);
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
     if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
+      return null;
     };
     userProfiles.get(user);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+      return; // Silently ignore for guest users
     };
     userProfiles.add(caller, profile);
   };
@@ -193,7 +193,7 @@ actor {
   // Customer Functions
   public shared ({ caller }) func createCustomer(customer : Customer) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can create a customer.");
+      Runtime.trap("Unauthorized: Please log in to create a customer.");
     };
     let id = nextCustomerId;
     let newCustomer = { customer with id };
@@ -204,7 +204,7 @@ actor {
 
   public shared ({ caller }) func updateCustomer(customer : Customer) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can update a customer.");
+      Runtime.trap("Unauthorized: Please log in to update a customer.");
     };
     if (not customers.containsKey(customer.id)) {
       Runtime.trap("Customer not found");
@@ -213,8 +213,8 @@ actor {
   };
 
   public shared ({ caller }) func deleteCustomer(id : Nat) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can delete a customer.");
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Please log in to delete a customer.");
     };
     if (not customers.containsKey(id)) {
       Runtime.trap("Customer not found");
@@ -224,7 +224,7 @@ actor {
 
   public query ({ caller }) func getCustomer(id : Nat) : async Customer {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view customers.");
+      Runtime.trap("Unauthorized: Please log in.");
     };
     switch (customers.get(id)) {
       case (?customer) { customer };
@@ -234,7 +234,7 @@ actor {
 
   public query ({ caller }) func listCustomers() : async [Customer] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can list customers.");
+      return [];
     };
     customers.values().toArray();
   };
@@ -242,7 +242,7 @@ actor {
   // Inventory Functions
   public shared ({ caller }) func createInventoryItem(item : InventoryItem) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can create an inventory item.");
+      Runtime.trap("Unauthorized: Please log in to create an inventory item.");
     };
     let id = nextInventoryId;
     let newItem = { item with id };
@@ -253,7 +253,7 @@ actor {
 
   public shared ({ caller }) func updateInventoryItem(item : InventoryItem) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can update an inventory item.");
+      Runtime.trap("Unauthorized: Please log in to update an inventory item.");
     };
     if (not inventory.containsKey(item.id)) {
       Runtime.trap("Inventory item not found");
@@ -262,8 +262,8 @@ actor {
   };
 
   public shared ({ caller }) func deleteInventoryItem(id : Nat) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can delete an inventory item.");
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Please log in to delete an inventory item.");
     };
     if (not inventory.containsKey(id)) {
       Runtime.trap("Inventory item not found");
@@ -273,7 +273,7 @@ actor {
 
   public query ({ caller }) func getInventoryItem(id : Nat) : async InventoryItem {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view inventory.");
+      Runtime.trap("Unauthorized: Please log in.");
     };
     switch (inventory.get(id)) {
       case (?item) { item };
@@ -283,7 +283,7 @@ actor {
 
   public query ({ caller }) func listInventory() : async [InventoryItem] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can list inventory.");
+      return [];
     };
     inventory.values().toArray();
   };
@@ -298,20 +298,31 @@ actor {
         let updatedItem = { item with sheetsAvailable = item.sheetsAvailable - qty };
         inventory.add(id, updatedItem);
       };
-      case (null) { Runtime.trap("Inventory item not found") };
+      case (null) { /* Silently ignore if inventory item not found */ };
+    };
+  };
+
+  // Internal function for stock restoration (used when invoice is deleted)
+  private func restoreStockInternal(id : Nat, qty : Int) {
+    switch (inventory.get(id)) {
+      case (?item) {
+        let updatedItem = { item with sheetsAvailable = item.sheetsAvailable + qty };
+        inventory.add(id, updatedItem);
+      };
+      case (null) { /* Silently ignore if inventory item not found */ };
     };
   };
 
   public shared ({ caller }) func deductStock(id : Nat, qty : Int) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can deduct stock.");
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Please log in.");
     };
     deductStockInternal(id, qty);
   };
 
   public query ({ caller }) func getLowStockItems() : async [InventoryItem] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view low stock items.");
+      return [];
     };
     inventory.values().filter(func(item) { item.sheetsAvailable <= item.lowStockThreshold }).toArray();
   };
@@ -319,7 +330,7 @@ actor {
   // Invoice Functions
   public shared ({ caller }) func createInvoice(invoice : Invoice) : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can create an invoice.");
+      Runtime.trap("Unauthorized: Please log in to create an invoice.");
     };
     let id = nextInvoiceId;
     let billNumber = "BILL-" # invoice.invoiceDate # "-" # id.toText();
@@ -331,7 +342,7 @@ actor {
 
   public shared ({ caller }) func updateInvoice(invoice : Invoice) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can update an invoice.");
+      Runtime.trap("Unauthorized: Please log in to update an invoice.");
     };
     switch (invoices.get(invoice.id)) {
       case (?existingInvoice) {
@@ -344,18 +355,32 @@ actor {
   };
 
   public shared ({ caller }) func deleteInvoice(id : Nat) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can delete an invoice.");
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Please log in to delete an invoice.");
     };
-    if (not invoices.containsKey(id)) {
-      Runtime.trap("Invoice not found");
+    switch (invoices.get(id)) {
+      case (?invoice) {
+        // Restore stock for saved invoices
+        if (invoice.status == #saved) {
+          for (item in invoice.items.vals()) {
+            switch (item.inventoryId) {
+              case (?invId) {
+                let qtyInt = item.qty.toInt();
+                restoreStockInternal(invId, qtyInt);
+              };
+              case (null) {};
+            };
+          };
+        };
+        invoices.remove(id);
+      };
+      case (null) { Runtime.trap("Invoice not found") };
     };
-    invoices.remove(id);
   };
 
   public query ({ caller }) func getInvoice(id : Nat) : async Invoice {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view invoices.");
+      Runtime.trap("Unauthorized: Please log in.");
     };
     switch (invoices.get(id)) {
       case (?invoice) { invoice };
@@ -365,20 +390,20 @@ actor {
 
   public query ({ caller }) func listInvoices() : async [Invoice] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can list invoices.");
+      return [];
     };
     invoices.values().toArray();
   };
 
   public shared ({ caller }) func changeInvoiceStatus(id : Nat, status : InvoiceStatus) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can update invoice status.");
+      Runtime.trap("Unauthorized: Please log in.");
     };
     switch (invoices.get(id)) {
       case (?invoice) {
         let updatedInvoice = { invoice with status };
         invoices.add(id, updatedInvoice);
-        // Stock deduction when invoice is saved - this is allowed for users as part of invoice workflow
+        // Stock deduction when invoice is saved
         if (status == #saved) {
           for (item in invoice.items.vals()) {
             switch (item.inventoryId) {
@@ -397,8 +422,8 @@ actor {
 
   // Customer Pricing Functions
   public shared ({ caller }) func setCustomerPricing(pricing : CustomerPricing) : async Nat {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can set customer pricing.");
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Please log in to set customer pricing.");
     };
 
     // Check for existing pricing for same customer & inventory
@@ -425,7 +450,7 @@ actor {
 
   public query ({ caller }) func getCustomerPricingByCustomerAndItem(customerId : Nat, inventoryId : Nat) : async ?CustomerPricing {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view customer pricing.");
+      return null;
     };
     customerPricing.values().find(
       func(p) { p.customerId == customerId and p.inventoryId == inventoryId }
@@ -434,14 +459,14 @@ actor {
 
   public query ({ caller }) func listCustomerPricingsByCustomer(customerId : Nat) : async [CustomerPricing] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view customer pricing.");
+      return [];
     };
     customerPricing.values().filter(func(p) { p.customerId == customerId }).toArray();
   };
 
   public shared ({ caller }) func deleteCustomerPricing(id : Nat) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can delete customer pricing.");
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Please log in to delete customer pricing.");
     };
     if (not customerPricing.containsKey(id)) {
       Runtime.trap("Customer pricing not found");
@@ -451,7 +476,7 @@ actor {
 
   public query ({ caller }) func listAllCustomerPricings() : async [CustomerPricing] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can list customer pricing.");
+      return [];
     };
     customerPricing.values().toArray();
   };
@@ -459,14 +484,14 @@ actor {
   // Company Settings
   public query ({ caller }) func getCompanySettings() : async ?CompanySettings {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view company settings.");
+      return null;
     };
     companySettings;
   };
 
   public shared ({ caller }) func updateCompanySettings(settings : CompanySettings) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Only admins can update company settings.");
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Please log in to update company settings.");
     };
     companySettings := ?settings;
   };
@@ -474,7 +499,7 @@ actor {
   // Report Functions
   public query ({ caller }) func getSalesSummary() : async { totalInvoices : Nat; totalSqft : Float } {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view sales summary.");
+      return { totalInvoices = 0; totalSqft = 0.0 };
     };
     var totalSqft : Float = 0.0;
     var totalInvoices : Nat = 0;
@@ -489,14 +514,14 @@ actor {
 
   public query ({ caller }) func getStockReport() : async [InventoryItem] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view stock report.");
+      return [];
     };
     inventory.values().toArray();
   };
 
   public query ({ caller }) func getCustomerPurchaseHistory(customerId : Nat) : async { totalSqft : Float; invoiceCount : Nat } {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only users can view customer purchase history.");
+      return { totalSqft = 0.0; invoiceCount = 0 };
     };
     var totalSqft : Float = 0.0;
     var invoiceCount : Nat = 0;

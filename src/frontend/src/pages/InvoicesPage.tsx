@@ -46,9 +46,24 @@ export default function InvoicesPage({ setNav }: Props) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: bigint) => actor!.deleteInvoice(id),
+    mutationFn: async (id: bigint) => {
+      const invoice = await actor!.getInvoice(id);
+      if (invoice.status === InvoiceStatus.saved) {
+        for (const item of invoice.items) {
+          if (item.inventoryId && item.qty > 0) {
+            const invItem = await actor!.getInventoryItem(item.inventoryId);
+            await actor!.updateInventoryItem({
+              ...invItem,
+              sheetsAvailable: invItem.sheetsAvailable + BigInt(item.qty),
+            });
+          }
+        }
+      }
+      await actor!.deleteInvoice(id);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
       toast.success("Invoice deleted");
       setDeleteId(null);
     },

@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Loader2, Package, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { InventoryItem } from "../backend";
@@ -67,7 +67,8 @@ export default function InventoryPage() {
       toast.success("Inventory item created");
       setModalOpen(false);
     },
-    onError: () => toast.error("Failed to save item"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to save item"),
   });
 
   const updateMutation = useMutation({
@@ -77,7 +78,8 @@ export default function InventoryPage() {
       toast.success("Item updated");
       setModalOpen(false);
     },
-    onError: () => toast.error("Failed to update item"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to update item"),
   });
 
   const deleteMutation = useMutation({
@@ -87,7 +89,8 @@ export default function InventoryPage() {
       toast.success("Item deleted");
       setDeleteId(null);
     },
-    onError: () => toast.error("Failed to delete item"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to delete item"),
   });
 
   const calcSqft = (l: number, w: number) => +(l * w).toFixed(2);
@@ -116,6 +119,10 @@ export default function InventoryPage() {
   };
 
   const handleSave = () => {
+    if (!actor) {
+      toast.error("Still connecting to server, please try again in a moment.");
+      return;
+    }
     const item = { ...form, sqftPerSheet: calcSqft(form.length, form.width) };
     if (isEditing) {
       updateMutation.mutate(item);
@@ -129,8 +136,46 @@ export default function InventoryPage() {
   const isLowStock = (item: InventoryItem) =>
     Number(item.sheetsAvailable) <= Number(item.lowStockThreshold);
 
+  // Summary stats
+  const totalSheets = inventory.reduce(
+    (sum, item) => sum + Number(item.sheetsAvailable),
+    0,
+  );
+  const totalItems = inventory.length;
+
   return (
     <div className="space-y-4">
+      {/* In-Hand Stock Summary Card */}
+      {isLoading || isFetching ? (
+        <Skeleton
+          data-ocid="inventory.loading_state"
+          className="h-20 w-full rounded-xl"
+        />
+      ) : (
+        <div
+          data-ocid="inventory.card"
+          className="flex items-center gap-4 bg-card rounded-xl border border-border p-4 shadow-sm"
+        >
+          <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-accent/15 text-accent shrink-0">
+            <Package size={22} />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Total In-Hand Stock
+            </p>
+            <p className="text-2xl font-bold text-foreground leading-tight">
+              {totalSheets.toLocaleString()}{" "}
+              <span className="text-base font-medium text-muted-foreground">
+                sheets
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              across {totalItems} product{totalItems !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
         <div className="relative flex-1">
           <Search
@@ -152,6 +197,7 @@ export default function InventoryPage() {
           data-ocid="inventory.add_button"
           className="bg-accent hover:bg-accent/90 text-accent-foreground"
           onClick={openAdd}
+          disabled={!actor}
         >
           <Plus size={15} className="mr-1" /> Add Item
         </Button>
@@ -171,7 +217,7 @@ export default function InventoryPage() {
                 </TableHead>
                 <TableHead className="hidden md:table-cell">L×W (ft)</TableHead>
                 <TableHead className="hidden lg:table-cell">Batch No</TableHead>
-                <TableHead>Sheets</TableHead>
+                <TableHead>In Hand Stock</TableHead>
                 <TableHead className="hidden lg:table-cell">
                   SQFT/Sheet
                 </TableHead>
@@ -185,7 +231,7 @@ export default function InventoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isLoading || isFetching ? (
                 ["skel-r1", "skel-r2", "skel-r3"].map((sk) => (
                   <TableRow key={sk}>
                     {[
@@ -487,7 +533,7 @@ export default function InventoryPage() {
               data-ocid="inventory.save_button"
               className="bg-accent hover:bg-accent/90 text-accent-foreground"
               onClick={handleSave}
-              disabled={isSaving || !form.brand}
+              disabled={isSaving || !form.brand || !actor}
             >
               {isSaving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

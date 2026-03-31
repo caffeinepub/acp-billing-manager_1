@@ -68,7 +68,9 @@ export default function ManagePricingPage() {
     if (inventory.length === 0) return;
     const initialRows: Record<string, PricingRowState> = {};
     for (const item of inventory) {
-      const existing = pricings.find((p) => p.inventoryId === item.id);
+      const existing = pricings.find(
+        (p) => Number(p.inventoryId) === Number(item.id),
+      );
       initialRows[String(item.id)] = {
         customRate: existing ? String(existing.customRate) : "",
         note: existing?.note ?? "",
@@ -103,7 +105,9 @@ export default function ManagePricingPage() {
   const handleSave = (item: InventoryItem) => {
     if (!selectedCustomer) return;
     const row = rows[String(item.id)];
-    const existing = pricings.find((p) => p.inventoryId === item.id);
+    const existing = pricings.find(
+      (p) => Number(p.inventoryId) === Number(item.id),
+    );
     saveMutation.mutate({
       id: existing?.id ?? BigInt(0),
       customerId: selectedCustomer.id,
@@ -114,7 +118,9 @@ export default function ManagePricingPage() {
   };
 
   const handleRemove = (item: InventoryItem) => {
-    const existing = pricings.find((p) => p.inventoryId === item.id);
+    const existing = pricings.find(
+      (p) => Number(p.inventoryId) === Number(item.id),
+    );
     if (existing) {
       deleteMutation.mutate(existing.id);
     }
@@ -297,7 +303,7 @@ export default function ManagePricingPage() {
                 <TableBody>
                   {inventory.map((item, i) => {
                     const existing = pricings.find(
-                      (p) => p.inventoryId === item.id,
+                      (p) => Number(p.inventoryId) === Number(item.id),
                     );
                     const row = rows[String(item.id)] ?? {
                       customRate: "",

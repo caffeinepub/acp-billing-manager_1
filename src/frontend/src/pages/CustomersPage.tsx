@@ -107,7 +107,8 @@ function CustomerPricingModal({
       });
       toast.success("Custom rate saved");
     },
-    onError: () => toast.error("Failed to save rate"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to save rate"),
   });
 
   const deleteMutation = useMutation({
@@ -118,7 +119,8 @@ function CustomerPricingModal({
       });
       toast.success("Custom rate removed");
     },
-    onError: () => toast.error("Failed to remove rate"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to remove rate"),
   });
 
   const handleSave = (item: InventoryItem) => {
@@ -340,7 +342,8 @@ export default function CustomersPage() {
       toast.success("Customer created");
       setModalOpen(false);
     },
-    onError: () => toast.error("Failed to save customer"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to save customer"),
   });
 
   const updateMutation = useMutation({
@@ -350,7 +353,8 @@ export default function CustomersPage() {
       toast.success("Customer updated");
       setModalOpen(false);
     },
-    onError: () => toast.error("Failed to update customer"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to update customer"),
   });
 
   const deleteMutation = useMutation({
@@ -360,7 +364,8 @@ export default function CustomersPage() {
       toast.success("Customer deleted");
       setDeleteId(null);
     },
-    onError: () => toast.error("Failed to delete customer"),
+    onError: (error: Error) =>
+      toast.error(error.message || "Failed to delete customer"),
   });
 
   const filtered = customers.filter(
@@ -386,6 +391,10 @@ export default function CustomersPage() {
   };
 
   const handleSave = () => {
+    if (!actor) {
+      toast.error("Still connecting to server, please try again in a moment.");
+      return;
+    }
     if (isEditing) {
       updateMutation.mutate(form as Customer);
     } else {
@@ -423,6 +432,7 @@ export default function CustomersPage() {
           data-ocid="customers.add_button"
           className="bg-accent hover:bg-accent/90 text-accent-foreground"
           onClick={openAdd}
+          disabled={!actor}
         >
           <Plus size={15} className="mr-1" /> Add Customer
         </Button>
@@ -443,7 +453,7 @@ export default function CustomersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isLoading || isFetching ? (
                 ["skel-r1", "skel-r2", "skel-r3"].map((sk) => (
                   <TableRow key={sk}>
                     {["c1", "c2", "c3", "c4", "c5", "c6"].map((sc) => (
@@ -750,7 +760,7 @@ export default function CustomersPage() {
               data-ocid="customers.save_button"
               className="bg-accent hover:bg-accent/90 text-accent-foreground"
               onClick={handleSave}
-              disabled={isSaving || !form.name}
+              disabled={isSaving || !form.name || !actor}
             >
               {isSaving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

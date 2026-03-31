@@ -255,9 +255,20 @@ export default function InvoiceFormPage({
   };
 
   const createMutation = useMutation({
-    mutationFn: (inv: Invoice) => actor!.createInvoice(inv),
+    mutationFn: async (inv: Invoice) => {
+      const newId = await actor!.createInvoice(inv);
+      if (inv.status === InvoiceStatus.saved) {
+        for (const item of inv.items) {
+          if (item.inventoryId && item.qty > 0) {
+            await actor!.deductStock(item.inventoryId, BigInt(item.qty));
+          }
+        }
+      }
+      return newId;
+    },
     onSuccess: (newId) => {
       qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["inventory"] });
       toast.success("Invoice saved!");
       setNav({
         page:
