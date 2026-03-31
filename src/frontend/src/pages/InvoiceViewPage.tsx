@@ -23,19 +23,6 @@ const PL_HEADERS = [
   "SQFT",
   "BATCH NO",
 ];
-const EMPTY_COLS = [
-  "ec0",
-  "ec1",
-  "ec2",
-  "ec3",
-  "ec4",
-  "ec5",
-  "ec6",
-  "ec7",
-  "ec8",
-  "ec9",
-  "ec10",
-];
 
 export default function InvoiceViewPage({ invoiceId, setNav }: Props) {
   const { actor, isFetching } = useActor();
@@ -204,19 +191,28 @@ export default function InvoiceViewPage({ invoiceId, setNav }: Props) {
         >
           <div>
             <strong>PARTY NAME: {invoice.partyName}</strong>
-            &nbsp;&nbsp; Dispatch Location: {invoice.dispatchLocation}
+            {invoice.dispatchLocation && (
+              <>&nbsp;&nbsp; Dispatch Location: {invoice.dispatchLocation}</>
+            )}
           </div>
           <div>ADDRESS - {invoice.billingAddress.street}</div>
           <div>
             CITY - {invoice.billingAddress.city}, {invoice.billingAddress.state}
           </div>
-          <div>
-            GSTIN - {invoice.gstin} &nbsp;&nbsp; PI NO. - {invoice.piNumber}
-          </div>
-          <div>
-            MOBILE NO - {invoice.phone} &nbsp;&nbsp; Sales Person:{" "}
-            {invoice.salesPerson}
-          </div>
+          {(invoice.gstin || invoice.piNumber) && (
+            <div>
+              {invoice.gstin && <>GSTIN - {invoice.gstin}</>}
+              {invoice.gstin && invoice.piNumber && <>&nbsp;&nbsp;</>}
+              {invoice.piNumber && <>PI NO. - {invoice.piNumber}</>}
+            </div>
+          )}
+          {(invoice.phone || invoice.salesPerson) && (
+            <div>
+              {invoice.phone && <>MOBILE NO - {invoice.phone}</>}
+              {invoice.phone && invoice.salesPerson && <>&nbsp;&nbsp;</>}
+              {invoice.salesPerson && <>Sales Person: {invoice.salesPerson}</>}
+            </div>
+          )}
         </div>
 
         {/* Billing / Delivery Address Split */}
@@ -246,8 +242,8 @@ export default function InvoiceViewPage({ invoiceId, setNav }: Props) {
             <div>
               {invoice.billingAddress.city}, {invoice.billingAddress.state}
             </div>
-            <div>GSTIN: {invoice.gstin}</div>
-            <div>Mobile: {invoice.phone}</div>
+            {invoice.gstin && <div>GSTIN: {invoice.gstin}</div>}
+            {invoice.phone && <div>Mobile: {invoice.phone}</div>}
           </div>
           <div style={{ padding: "4pt" }}>
             <div
@@ -266,8 +262,12 @@ export default function InvoiceViewPage({ invoiceId, setNav }: Props) {
             <div>
               {invoice.deliveryAddress.city}, {invoice.deliveryAddress.state}
             </div>
-            <div>GSTIN: {invoice.gstin}</div>
-            <div>Mobile: {invoice.deliveryAddress.phone || invoice.phone}</div>
+            {invoice.gstin && <div>GSTIN: {invoice.gstin}</div>}
+            {(invoice.deliveryAddress.phone || invoice.phone) && (
+              <div>
+                Mobile: {invoice.deliveryAddress.phone || invoice.phone}
+              </div>
+            )}
           </div>
         </div>
 
@@ -317,20 +317,6 @@ export default function InvoiceViewPage({ invoiceId, setNav }: Props) {
                 <td style={cellStyle}>{item.batchNumber}</td>
               </tr>
             ))}
-            {invoice.items.length < 8 &&
-              [...Array(Math.max(0, 8 - invoice.items.length))].map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: empty filler rows
-                <tr key={`empty-${i}`}>
-                  {EMPTY_COLS.map((ec) => (
-                    <td
-                      key={ec}
-                      style={{ border: "0.5pt solid #000", padding: "8pt 3pt" }}
-                    >
-                      &nbsp;
-                    </td>
-                  ))}
-                </tr>
-              ))}
           </tbody>
           <tfoot>
             <tr style={{ background: "#f0f0f0", fontWeight: "bold" }}>

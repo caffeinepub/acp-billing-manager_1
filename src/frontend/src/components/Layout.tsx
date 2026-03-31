@@ -11,6 +11,7 @@ import {
   Menu,
   Package,
   Settings,
+  Tags,
   Users,
   X,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const NAV_ITEMS: { label: string; page: Page; icon: ReactNode }[] = [
   { label: "Inventory", page: "inventory", icon: <Package size={18} /> },
   { label: "Invoices", page: "invoices", icon: <FileText size={18} /> },
   { label: "Reports", page: "reports", icon: <BarChart2 size={18} /> },
+  { label: "Manage Pricing", page: "manage-pricing", icon: <Tags size={18} /> },
   { label: "Settings", page: "settings", icon: <Settings size={18} /> },
 ];
 
@@ -48,6 +50,7 @@ const PAGE_TITLES: Partial<Record<Page, string>> = {
   "invoice-edit": "Edit Invoice",
   reports: "Reports",
   settings: "Settings",
+  "manage-pricing": "Manage Pricing",
 };
 
 export default function Layout({ children, nav, setNav }: LayoutProps) {

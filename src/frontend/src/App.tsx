@@ -11,6 +11,7 @@ import InvoiceFormPage from "./pages/InvoiceFormPage";
 import InvoiceViewPage from "./pages/InvoiceViewPage";
 import InvoicesPage from "./pages/InvoicesPage";
 import LoginPage from "./pages/LoginPage";
+import ManagePricingPage from "./pages/ManagePricingPage";
 import ReportsPage from "./pages/ReportsPage";
 import SettingsPage from "./pages/SettingsPage";
 import TaxInvoiceViewPage from "./pages/TaxInvoiceViewPage";
@@ -26,7 +27,8 @@ export type Page =
   | "invoice-view-packing"
   | "invoice-view-tax"
   | "reports"
-  | "settings";
+  | "settings"
+  | "manage-pricing";
 
 export type NavState = {
   page: Page;
@@ -109,6 +111,8 @@ export default function App() {
         return <ReportsPage />;
       case "settings":
         return <SettingsPage />;
+      case "manage-pricing":
+        return <ManagePricingPage />;
       default:
         return <DashboardPage setNav={setNav} />;
     }
@@ -195,6 +199,8 @@ async function seedIfEmpty(actor: import("./backend").backendInterface) {
           sheetsAvailable: BigInt(50),
           lowStockThreshold: BigInt(10),
           sqftPerSheet: 48,
+          purchaseRate: 0,
+          sellingRate: 0,
         }),
         actor.createInventoryItem({
           id: BigInt(0),
@@ -209,6 +215,8 @@ async function seedIfEmpty(actor: import("./backend").backendInterface) {
           sheetsAvailable: BigInt(30),
           lowStockThreshold: BigInt(10),
           sqftPerSheet: 32,
+          purchaseRate: 0,
+          sellingRate: 0,
         }),
       ]);
     }

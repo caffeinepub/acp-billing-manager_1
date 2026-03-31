@@ -39,8 +39,10 @@ export const InventoryItem = IDL.Record({
   'colorCode' : IDL.Text,
   'colorName' : IDL.Text,
   'lowStockThreshold' : IDL.Int,
+  'purchaseRate' : IDL.Float64,
   'sheetsAvailable' : IDL.Int,
   'thickness' : IDL.Float64,
+  'sellingRate' : IDL.Float64,
   'sqftPerSheet' : IDL.Float64,
   'grade' : IDL.Text,
   'length' : IDL.Float64,
@@ -117,6 +119,13 @@ export const CompanySettings = IDL.Record({
   'accountNumber' : IDL.Text,
   'phone' : IDL.Text,
 });
+export const CustomerPricing = IDL.Record({
+  'id' : IDL.Nat,
+  'note' : IDL.Text,
+  'customRate' : IDL.Float64,
+  'customerId' : IDL.Nat,
+  'inventoryId' : IDL.Nat,
+});
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
@@ -127,12 +136,18 @@ export const idlService = IDL.Service({
   'createInvoice' : IDL.Func([Invoice], [IDL.Nat], []),
   'deductStock' : IDL.Func([IDL.Nat, IDL.Int], [], []),
   'deleteCustomer' : IDL.Func([IDL.Nat], [], []),
+  'deleteCustomerPricing' : IDL.Func([IDL.Nat], [], []),
   'deleteInventoryItem' : IDL.Func([IDL.Nat], [], []),
   'deleteInvoice' : IDL.Func([IDL.Nat], [], []),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCompanySettings' : IDL.Func([], [IDL.Opt(CompanySettings)], ['query']),
   'getCustomer' : IDL.Func([IDL.Nat], [Customer], ['query']),
+  'getCustomerPricingByCustomerAndItem' : IDL.Func(
+      [IDL.Nat, IDL.Nat],
+      [IDL.Opt(CustomerPricing)],
+      ['query'],
+    ),
   'getCustomerPurchaseHistory' : IDL.Func(
       [IDL.Nat],
       [IDL.Record({ 'invoiceCount' : IDL.Nat, 'totalSqft' : IDL.Float64 })],
@@ -153,10 +168,21 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'listAllCustomerPricings' : IDL.Func(
+      [],
+      [IDL.Vec(CustomerPricing)],
+      ['query'],
+    ),
+  'listCustomerPricingsByCustomer' : IDL.Func(
+      [IDL.Nat],
+      [IDL.Vec(CustomerPricing)],
+      ['query'],
+    ),
   'listCustomers' : IDL.Func([], [IDL.Vec(Customer)], ['query']),
   'listInventory' : IDL.Func([], [IDL.Vec(InventoryItem)], ['query']),
   'listInvoices' : IDL.Func([], [IDL.Vec(Invoice)], ['query']),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setCustomerPricing' : IDL.Func([CustomerPricing], [IDL.Nat], []),
   'updateCompanySettings' : IDL.Func([CompanySettings], [], []),
   'updateCustomer' : IDL.Func([Customer], [], []),
   'updateInventoryItem' : IDL.Func([InventoryItem], [], []),
@@ -194,8 +220,10 @@ export const idlFactory = ({ IDL }) => {
     'colorCode' : IDL.Text,
     'colorName' : IDL.Text,
     'lowStockThreshold' : IDL.Int,
+    'purchaseRate' : IDL.Float64,
     'sheetsAvailable' : IDL.Int,
     'thickness' : IDL.Float64,
+    'sellingRate' : IDL.Float64,
     'sqftPerSheet' : IDL.Float64,
     'grade' : IDL.Text,
     'length' : IDL.Float64,
@@ -272,6 +300,13 @@ export const idlFactory = ({ IDL }) => {
     'accountNumber' : IDL.Text,
     'phone' : IDL.Text,
   });
+  const CustomerPricing = IDL.Record({
+    'id' : IDL.Nat,
+    'note' : IDL.Text,
+    'customRate' : IDL.Float64,
+    'customerId' : IDL.Nat,
+    'inventoryId' : IDL.Nat,
+  });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
@@ -282,12 +317,18 @@ export const idlFactory = ({ IDL }) => {
     'createInvoice' : IDL.Func([Invoice], [IDL.Nat], []),
     'deductStock' : IDL.Func([IDL.Nat, IDL.Int], [], []),
     'deleteCustomer' : IDL.Func([IDL.Nat], [], []),
+    'deleteCustomerPricing' : IDL.Func([IDL.Nat], [], []),
     'deleteInventoryItem' : IDL.Func([IDL.Nat], [], []),
     'deleteInvoice' : IDL.Func([IDL.Nat], [], []),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCompanySettings' : IDL.Func([], [IDL.Opt(CompanySettings)], ['query']),
     'getCustomer' : IDL.Func([IDL.Nat], [Customer], ['query']),
+    'getCustomerPricingByCustomerAndItem' : IDL.Func(
+        [IDL.Nat, IDL.Nat],
+        [IDL.Opt(CustomerPricing)],
+        ['query'],
+      ),
     'getCustomerPurchaseHistory' : IDL.Func(
         [IDL.Nat],
         [IDL.Record({ 'invoiceCount' : IDL.Nat, 'totalSqft' : IDL.Float64 })],
@@ -308,10 +349,21 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'listAllCustomerPricings' : IDL.Func(
+        [],
+        [IDL.Vec(CustomerPricing)],
+        ['query'],
+      ),
+    'listCustomerPricingsByCustomer' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Vec(CustomerPricing)],
+        ['query'],
+      ),
     'listCustomers' : IDL.Func([], [IDL.Vec(Customer)], ['query']),
     'listInventory' : IDL.Func([], [IDL.Vec(InventoryItem)], ['query']),
     'listInvoices' : IDL.Func([], [IDL.Vec(Invoice)], ['query']),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setCustomerPricing' : IDL.Func([CustomerPricing], [IDL.Nat], []),
     'updateCompanySettings' : IDL.Func([CompanySettings], [], []),
     'updateCustomer' : IDL.Func([Customer], [], []),
     'updateInventoryItem' : IDL.Func([InventoryItem], [], []),

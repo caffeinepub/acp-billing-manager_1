@@ -38,13 +38,22 @@ export interface Customer {
   'shippingAddress' : Address,
   'phone' : string,
 }
+export interface CustomerPricing {
+  'id' : bigint,
+  'note' : string,
+  'customRate' : number,
+  'customerId' : bigint,
+  'inventoryId' : bigint,
+}
 export interface InventoryItem {
   'id' : bigint,
   'colorCode' : string,
   'colorName' : string,
   'lowStockThreshold' : bigint,
+  'purchaseRate' : number,
   'sheetsAvailable' : bigint,
   'thickness' : number,
+  'sellingRate' : number,
   'sqftPerSheet' : number,
   'grade' : string,
   'length' : number,
@@ -122,12 +131,17 @@ export interface _SERVICE {
   'createInvoice' : ActorMethod<[Invoice], bigint>,
   'deductStock' : ActorMethod<[bigint, bigint], undefined>,
   'deleteCustomer' : ActorMethod<[bigint], undefined>,
+  'deleteCustomerPricing' : ActorMethod<[bigint], undefined>,
   'deleteInventoryItem' : ActorMethod<[bigint], undefined>,
   'deleteInvoice' : ActorMethod<[bigint], undefined>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCompanySettings' : ActorMethod<[], [] | [CompanySettings]>,
   'getCustomer' : ActorMethod<[bigint], Customer>,
+  'getCustomerPricingByCustomerAndItem' : ActorMethod<
+    [bigint, bigint],
+    [] | [CustomerPricing]
+  >,
   'getCustomerPurchaseHistory' : ActorMethod<
     [bigint],
     { 'invoiceCount' : bigint, 'totalSqft' : number }
@@ -142,10 +156,16 @@ export interface _SERVICE {
   'getStockReport' : ActorMethod<[], Array<InventoryItem>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'listAllCustomerPricings' : ActorMethod<[], Array<CustomerPricing>>,
+  'listCustomerPricingsByCustomer' : ActorMethod<
+    [bigint],
+    Array<CustomerPricing>
+  >,
   'listCustomers' : ActorMethod<[], Array<Customer>>,
   'listInventory' : ActorMethod<[], Array<InventoryItem>>,
   'listInvoices' : ActorMethod<[], Array<Invoice>>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setCustomerPricing' : ActorMethod<[CustomerPricing], bigint>,
   'updateCompanySettings' : ActorMethod<[CompanySettings], undefined>,
   'updateCustomer' : ActorMethod<[Customer], undefined>,
   'updateInventoryItem' : ActorMethod<[InventoryItem], undefined>,

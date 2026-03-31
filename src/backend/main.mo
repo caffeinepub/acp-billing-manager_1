@@ -3,13 +3,14 @@ import Int "mo:core/Int";
 import Float "mo:core/Float";
 import Map "mo:core/Map";
 import Nat "mo:core/Nat";
-import Iter "mo:core/Iter";
-import List "mo:core/List";
 import Principal "mo:core/Principal";
 import Order "mo:core/Order";
 import Runtime "mo:core/Runtime";
+
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+
+// Use migration module on upgrade
 
 actor {
   // Initialize Access Control
@@ -55,6 +56,16 @@ actor {
     sheetsAvailable : Int;
     sqftPerSheet : Float;
     lowStockThreshold : Int;
+    purchaseRate : Float;
+    sellingRate : Float;
+  };
+
+  type CustomerPricing = {
+    id : Nat;
+    customerId : Nat;
+    inventoryId : Nat;
+    customRate : Float;
+    note : Text;
   };
 
   type InvoiceType = { #packingList; #taxInvoice };
@@ -118,7 +129,7 @@ actor {
 
   module Invoice {
     public func compare(invoice1 : Invoice, invoice2 : Invoice) : Order.Order {
-      Nat.compare(invoice2.id, invoice1.id);
+      Nat.compare(invoice1.id, invoice2.id);
     };
   };
 
@@ -138,15 +149,23 @@ actor {
     name : Text;
   };
 
+  public type UserRole = {
+    #admin;
+    #user;
+    #guest;
+  };
+
   // State
   var nextCustomerId = 1;
   var nextInventoryId = 1;
   var nextInvoiceId = 1;
+  var nextCustomerPricingId = 1;
 
   let customers = Map.empty<Nat, Customer>();
   let inventory = Map.empty<Nat, InventoryItem>();
   let invoices = Map.empty<Nat, Invoice>();
   var companySettings : ?CompanySettings = null;
+  let customerPricing = Map.empty<Nat, CustomerPricing>();
   let userProfiles = Map.empty<Principal, UserProfile>();
 
   // User Profile Functions
@@ -217,7 +236,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can list customers.");
     };
-    customers.values().toArray().sort();
+    customers.values().toArray();
   };
 
   // Inventory Functions
@@ -269,7 +288,7 @@ actor {
     inventory.values().toArray();
   };
 
-  // Internal function for stock deduction (no authorization check)
+  // Internal function for stock deduction (no authorization check - only called from authorized contexts)
   private func deductStockInternal(id : Nat, qty : Int) {
     switch (inventory.get(id)) {
       case (?item) {
@@ -348,7 +367,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can list invoices.");
     };
-    invoices.values().toArray().sort();
+    invoices.values().toArray();
   };
 
   public shared ({ caller }) func changeInvoiceStatus(id : Nat, status : InvoiceStatus) : async () {
@@ -359,6 +378,7 @@ actor {
       case (?invoice) {
         let updatedInvoice = { invoice with status };
         invoices.add(id, updatedInvoice);
+        // Stock deduction when invoice is saved - this is allowed for users as part of invoice workflow
         if (status == #saved) {
           for (item in invoice.items.vals()) {
             switch (item.inventoryId) {
@@ -373,6 +393,67 @@ actor {
       };
       case (null) { Runtime.trap("Invoice not found") };
     };
+  };
+
+  // Customer Pricing Functions
+  public shared ({ caller }) func setCustomerPricing(pricing : CustomerPricing) : async Nat {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can set customer pricing.");
+    };
+
+    // Check for existing pricing for same customer & inventory
+    let existing = customerPricing.values().find(
+      func(p) {
+        p.customerId == pricing.customerId and
+        p.inventoryId == pricing.inventoryId
+      }
+    );
+
+    let id = switch (existing) {
+      case (?p) { p.id };
+      case (null) {
+        let newId = nextCustomerPricingId;
+        nextCustomerPricingId += 1;
+        newId;
+      };
+    };
+
+    let newPricing = { pricing with id };
+    customerPricing.add(id, newPricing);
+    id;
+  };
+
+  public query ({ caller }) func getCustomerPricingByCustomerAndItem(customerId : Nat, inventoryId : Nat) : async ?CustomerPricing {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can view customer pricing.");
+    };
+    customerPricing.values().find(
+      func(p) { p.customerId == customerId and p.inventoryId == inventoryId }
+    );
+  };
+
+  public query ({ caller }) func listCustomerPricingsByCustomer(customerId : Nat) : async [CustomerPricing] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can view customer pricing.");
+    };
+    customerPricing.values().filter(func(p) { p.customerId == customerId }).toArray();
+  };
+
+  public shared ({ caller }) func deleteCustomerPricing(id : Nat) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can delete customer pricing.");
+    };
+    if (not customerPricing.containsKey(id)) {
+      Runtime.trap("Customer pricing not found");
+    };
+    customerPricing.remove(id);
+  };
+
+  public query ({ caller }) func listAllCustomerPricings() : async [CustomerPricing] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only users can list customer pricing.");
+    };
+    customerPricing.values().toArray();
   };
 
   // Company Settings

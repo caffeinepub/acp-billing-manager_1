@@ -20,10 +20,15 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Copy, Loader2, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { Address, Customer } from "../backend";
+import type {
+  Address,
+  Customer,
+  CustomerPricing,
+  InventoryItem,
+} from "../backend";
 import { useActor } from "../hooks/useActor";
 
 const emptyAddress = (): Address => ({
@@ -45,6 +50,270 @@ const emptyCustomer = (): Omit<Customer, "id"> & { id: bigint } => ({
   shippingAddress: emptyAddress(),
 });
 
+// ─── Customer Pricing Modal ───────────────────────────────────────────────────
+
+interface PricingRowState {
+  customRate: string;
+  note: string;
+}
+
+interface CustomerPricingModalProps {
+  customer: Customer;
+  open: boolean;
+  onClose: () => void;
+}
+
+function CustomerPricingModal({
+  customer,
+  open,
+  onClose,
+}: CustomerPricingModalProps) {
+  const { actor, isFetching } = useActor();
+  const qc = useQueryClient();
+  const [rows, setRows] = useState<Record<string, PricingRowState>>({});
+
+  const { data: inventory = [], isLoading: loadingInventory } = useQuery({
+    queryKey: ["inventory"],
+    queryFn: () => actor!.listInventory(),
+    enabled: !!actor && !isFetching,
+  });
+
+  const { data: pricings = [], isLoading: loadingPricings } = useQuery({
+    queryKey: ["customerPricings", String(customer.id)],
+    queryFn: () => actor!.listCustomerPricingsByCustomer(customer.id),
+    enabled: !!actor && !isFetching && open,
+  });
+
+  // Sync local row state when remote data loads or changes (e.g., after save/remove)
+  useEffect(() => {
+    if (inventory.length === 0) return;
+    const initialRows: Record<string, PricingRowState> = {};
+    for (const item of inventory) {
+      const existing = pricings.find((p) => p.inventoryId === item.id);
+      initialRows[String(item.id)] = {
+        customRate: existing ? String(existing.customRate) : "",
+        note: existing?.note ?? "",
+      };
+    }
+    setRows(initialRows);
+  }, [inventory, pricings]);
+
+  const saveMutation = useMutation({
+    mutationFn: (pricing: CustomerPricing) =>
+      actor!.setCustomerPricing(pricing),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["customerPricings", String(customer.id)],
+      });
+      toast.success("Custom rate saved");
+    },
+    onError: () => toast.error("Failed to save rate"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: bigint) => actor!.deleteCustomerPricing(id),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["customerPricings", String(customer.id)],
+      });
+      toast.success("Custom rate removed");
+    },
+    onError: () => toast.error("Failed to remove rate"),
+  });
+
+  const handleSave = (item: InventoryItem) => {
+    const row = rows[String(item.id)];
+    const existing = pricings.find((p) => p.inventoryId === item.id);
+    saveMutation.mutate({
+      id: existing?.id ?? BigInt(0),
+      customerId: customer.id,
+      inventoryId: item.id,
+      customRate: Number.parseFloat(row?.customRate || "0") || 0,
+      note: row?.note ?? "",
+    });
+  };
+
+  const handleRemove = (item: InventoryItem) => {
+    const existing = pricings.find((p) => p.inventoryId === item.id);
+    if (existing) {
+      deleteMutation.mutate(existing.id);
+    }
+  };
+
+  const updateRow = (
+    itemId: bigint,
+    field: keyof PricingRowState,
+    value: string,
+  ) => {
+    setRows((prev) => ({
+      ...prev,
+      [String(itemId)]: {
+        ...(prev[String(itemId)] ?? { customRate: "", note: "" }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const isLoading = loadingInventory || loadingPricings;
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent
+        className="max-w-3xl max-h-[85vh] overflow-y-auto"
+        data-ocid="customers.pricing.dialog"
+      >
+        <DialogHeader>
+          <DialogTitle>Manage Pricing — {customer.name}</DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="py-8 space-y-3">
+            {["s1", "s2", "s3"].map((s) => (
+              <Skeleton key={s} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Brand</TableHead>
+                  <TableHead>Colour</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Thickness
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">L×W</TableHead>
+                  <TableHead>Default Rate</TableHead>
+                  <TableHead>Custom Rate (₹)</TableHead>
+                  <TableHead className="hidden sm:table-cell">Note</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inventory.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center py-8 text-muted-foreground"
+                    >
+                      No inventory items found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  inventory.map((item, i) => {
+                    const existing = pricings.find(
+                      (p) => p.inventoryId === item.id,
+                    );
+                    const row = rows[String(item.id)] ?? {
+                      customRate: "",
+                      note: "",
+                    };
+                    return (
+                      <TableRow
+                        key={Number(item.id)}
+                        data-ocid={`customers.pricing.item.${i + 1}`}
+                      >
+                        <TableCell className="font-medium">
+                          {item.brand}
+                        </TableCell>
+                        <TableCell>{item.colorName}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {item.thickness} MM
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          {item.length}×{item.width}
+                        </TableCell>
+                        <TableCell>
+                          {existing ? (
+                            <Badge
+                              variant="outline"
+                              className="border-accent/50 text-accent bg-accent/10"
+                            >
+                              ₹{existing.customRate}/sqft
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">
+                              ₹{item.sellingRate}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            data-ocid={`customers.pricing.input.${i + 1}`}
+                            type="number"
+                            value={row.customRate}
+                            onChange={(e) =>
+                              updateRow(item.id, "customRate", e.target.value)
+                            }
+                            className="w-24"
+                            placeholder="0.00"
+                          />
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <Input
+                            type="text"
+                            value={row.note}
+                            onChange={(e) =>
+                              updateRow(item.id, "note", e.target.value)
+                            }
+                            className="w-32"
+                            placeholder="Optional note"
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              data-ocid={`customers.pricing.save_button.${i + 1}`}
+                              size="sm"
+                              className="bg-accent hover:bg-accent/90 text-accent-foreground h-7 text-xs px-2"
+                              onClick={() => handleSave(item)}
+                              disabled={saveMutation.isPending}
+                            >
+                              {saveMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
+                            </Button>
+                            {existing && (
+                              <Button
+                                data-ocid={`customers.pricing.delete_button.${i + 1}`}
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs px-2 text-destructive hover:text-destructive"
+                                onClick={() => handleRemove(item)}
+                                disabled={deleteMutation.isPending}
+                              >
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            data-ocid="customers.pricing.close_button"
+            variant="outline"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main CustomersPage ────────────────────────────────────────────────────────
+
 export default function CustomersPage() {
   const { actor, isFetching } = useActor();
   const qc = useQueryClient();
@@ -54,6 +323,7 @@ export default function CustomersPage() {
   const [deleteId, setDeleteId] = useState<bigint | null>(null);
   const [form, setForm] = useState(emptyCustomer());
   const [isEditing, setIsEditing] = useState(false);
+  const [pricingCustomer, setPricingCustomer] = useState<Customer | null>(null);
 
   const PAGE_SIZE = 10;
 
@@ -216,6 +486,16 @@ export default function CustomersPage() {
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button
+                          data-ocid={`customers.pricing.open_modal_button.${i + 1}`}
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-primary hover:text-primary"
+                          title="Manage Pricing"
+                          onClick={() => setPricingCustomer(c)}
+                        >
+                          <Tag size={14} />
+                        </Button>
+                        <Button
                           data-ocid={`customers.edit_button.${i + 1}`}
                           variant="ghost"
                           size="icon"
@@ -268,6 +548,15 @@ export default function CustomersPage() {
             Next
           </Button>
         </div>
+      )}
+
+      {/* Customer Pricing Modal */}
+      {pricingCustomer && (
+        <CustomerPricingModal
+          customer={pricingCustomer}
+          open={!!pricingCustomer}
+          onClose={() => setPricingCustomer(null)}
+        />
       )}
 
       {/* Add/Edit Modal */}

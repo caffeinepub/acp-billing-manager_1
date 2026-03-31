@@ -38,6 +38,8 @@ const emptyItem = (): InventoryItem => ({
   sheetsAvailable: BigInt(0),
   lowStockThreshold: BigInt(10),
   sqftPerSheet: 0,
+  purchaseRate: 0,
+  sellingRate: 0,
 });
 
 export default function InventoryPage() {
@@ -173,6 +175,12 @@ export default function InventoryPage() {
                 <TableHead className="hidden lg:table-cell">
                   SQFT/Sheet
                 </TableHead>
+                <TableHead className="hidden lg:table-cell">
+                  Purchase Rate
+                </TableHead>
+                <TableHead className="hidden lg:table-cell">
+                  Selling Rate
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -191,6 +199,8 @@ export default function InventoryPage() {
                       "c8",
                       "c9",
                       "c10",
+                      "c11",
+                      "c12",
                     ].map((sc) => (
                       <TableCell key={sc}>
                         <Skeleton className="h-4 w-full" />
@@ -200,7 +210,7 @@ export default function InventoryPage() {
                 ))
               ) : paginated.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-12">
+                  <TableCell colSpan={12} className="text-center py-12">
                     <div
                       data-ocid="inventory.empty_state"
                       className="text-muted-foreground text-sm"
@@ -247,6 +257,12 @@ export default function InventoryPage() {
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       {item.sqftPerSheet}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      ₹{item.purchaseRate}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell">
+                      ₹{item.sellingRate}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -434,6 +450,28 @@ export default function InventoryPage() {
                     lowStockThreshold: BigInt(Math.max(0, +e.target.value)),
                   }))
                 }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Purchase Rate (per sqft) ₹</Label>
+              <Input
+                type="number"
+                value={form.purchaseRate}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, purchaseRate: +e.target.value }))
+                }
+                placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Selling Rate (per sqft) ₹</Label>
+              <Input
+                type="number"
+                value={form.sellingRate}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, sellingRate: +e.target.value }))
+                }
+                placeholder="0.00"
               />
             </div>
           </div>

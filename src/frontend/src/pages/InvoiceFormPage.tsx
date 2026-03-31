@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { NavState } from "../App";
 import { InvoiceStatus, InvoiceType } from "../backend";
-import type { Customer, InventoryItem, Invoice, InvoiceItem } from "../backend";
+import type { Invoice, InvoiceItem } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { numberToWords } from "../lib/invoiceUtils";
 
@@ -56,6 +56,9 @@ export default function InvoiceFormPage({
 }: Props) {
   const { actor, isFetching } = useActor();
   const qc = useQueryClient();
+
+  // Determine invoice type early — used in selectInventory below
+  const isTaxInvoice = invoiceType === InvoiceType.taxInvoice;
 
   const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
@@ -124,6 +127,13 @@ export default function InvoiceFormPage({
     ackDate: "",
   });
 
+  // Fetch custom pricing for the selected customer
+  const { data: customerPricings = [] } = useQuery({
+    queryKey: ["customerPricings", String(Number(form.customerId))],
+    queryFn: () => actor!.listCustomerPricingsByCustomer(form.customerId),
+    enabled: !!actor && !isFetching && form.customerId !== BigInt(0),
+  });
+
   // Load existing invoice for edit
   useEffect(() => {
     if (existingInvoice) {
@@ -187,9 +197,29 @@ export default function InvoiceFormPage({
     updateItems(items.length ? items : [emptyItem(0)]);
   };
 
+  const updateRateGst = (ratePerSqft: number, gstRate: number) => {
+    const taxCalc = calcTax(form.totalSqft, ratePerSqft, gstRate);
+    setForm((f) => ({
+      ...f,
+      ratePerSqft,
+      gstRate,
+      ...taxCalc,
+      amountInWords: numberToWords(taxCalc.grandTotal),
+    }));
+  };
+
   const selectInventory = (idx: number, invId: string) => {
     const inv = inventory.find((i) => Number(i.id) === Number(invId));
     if (!inv) return;
+
+    // Determine rate: customer custom rate takes precedence over default selling rate
+    const pricingEntry = customerPricings.find(
+      (p) => Number(p.inventoryId) === Number(inv.id),
+    );
+    const rate = pricingEntry
+      ? pricingEntry.customRate
+      : (inv.sellingRate ?? 0);
+
     updateItem(idx, {
       inventoryId: inv.id,
       brand: inv.brand,
@@ -202,6 +232,11 @@ export default function InvoiceFormPage({
       batchNumber: inv.batchNumber,
       sqft: +(inv.length * inv.width * form.items[idx].qty).toFixed(2),
     });
+
+    // Apply rate only for Tax Invoice (packing list has no pricing fields)
+    if (isTaxInvoice) {
+      updateRateGst(rate, form.gstRate);
+    }
   };
 
   const selectCustomer = (customerId: string) => {
@@ -216,17 +251,6 @@ export default function InvoiceFormPage({
       city: c.billingAddress.city,
       gstin: c.gstin,
       phone: c.phone,
-    }));
-  };
-
-  const updateRateGst = (ratePerSqft: number, gstRate: number) => {
-    const taxCalc = calcTax(form.totalSqft, ratePerSqft, gstRate);
-    setForm((f) => ({
-      ...f,
-      ratePerSqft,
-      gstRate,
-      ...taxCalc,
-      amountInWords: numberToWords(taxCalc.grandTotal),
     }));
   };
 
@@ -263,10 +287,22 @@ export default function InvoiceFormPage({
   });
 
   const handleSave = (status: InvoiceStatus) => {
+    // Filter out completely empty rows before saving
+    const filled = form.items.filter(
+      (item) =>
+        item.inventoryId ||
+        item.brand.trim() ||
+        item.grade.trim() ||
+        item.colorName.trim(),
+    );
+    const itemsToSave = (filled.length > 0 ? filled : form.items).map(
+      (item, i) => ({ ...item, lineId: BigInt(i + 1) }),
+    );
+
     const inv: Invoice = {
       ...form,
       status,
-      items: form.items.map((item, i) => ({ ...item, lineId: BigInt(i + 1) })),
+      items: itemsToSave,
     };
     if (invoiceId) {
       updateMutation.mutate(inv);
@@ -277,7 +313,11 @@ export default function InvoiceFormPage({
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const isTaxInvoice = invoiceType === InvoiceType.taxInvoice;
+  // Helper: check if the current rate matches a custom pricing entry
+  const isCustomRate =
+    form.ratePerSqft > 0 &&
+    form.customerId !== BigInt(0) &&
+    customerPricings.some((p) => p.customRate === form.ratePerSqft);
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -453,7 +493,20 @@ export default function InvoiceFormPage({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Rate per SQFT (₹)</Label>
+                <div className="flex items-center gap-2">
+                  <Label>Rate per SQFT (₹)</Label>
+                  {form.customerId !== BigInt(0) && form.ratePerSqft > 0 && (
+                    <span
+                      className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                        isCustomRate
+                          ? "bg-green-100 text-green-700"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {isCustomRate ? "Custom Rate" : "Default Rate"}
+                    </span>
+                  )}
+                </div>
                 <Input
                   type="number"
                   value={form.ratePerSqft}
